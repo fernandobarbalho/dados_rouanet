@@ -1,0 +1,48 @@
+---
+title: "storytelling_rouanet"
+author: "Fernando Almeida Barbalho"
+date: "2026-05-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(readxl)
+library(colorspace)
+
+grid_Projetos_Por_UF <- 
+  read_excel("grid_Projetos_Por_UF.xlsx", 
+    sheet = "Resumo") %>%
+  janitor::clean_names()
+
+```
+
+
+
+```{r fig.dpi= 300}
+
+orcamento_filme<- 134e6
+
+dados_grafico_comparacao_filme_bozo<-
+  grid_Projetos_Por_UF %>%
+  summarise(valor_total_uf = sum(vl_captado),
+            .by = uf) %>%
+  arrange(valor_total_uf) %>%
+  mutate(valor_acumulado = cumsum(valor_total_uf)) %>%
+  filter(valor_acumulado < orcamento_filme) %>%
+  mutate(tipo = "Captação Rouanet") %>%
+  select(uf, valor_total_uf, tipo) %>%
+  bind_rows(
+    tibble(uf = "SR",valor_total_uf =orcamento_filme, tipo = "Orçamento Dark Horse" )
+  ) 
+
+
+dados_grafico_comparacao_filme_bozo %>%
+  ggplot(aes(x=valor_total_uf, y= tipo )) +
+  geom_col(aes(fill= valor_total_uf), color = "lightgray") +
+  scale_fill_continuous_sequential(palette = "Heat 2")
+
+
+```
+
