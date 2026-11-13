@@ -6,6 +6,14 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
+options(encoding = "UTF-8")
+
+try(Sys.setlocale("LC_CTYPE", "Portuguese_Brazil.utf8"), silent = TRUE)
+
+stopifnot(
+  Encoding(enc2utf8("bilhões")) %in% c("UTF-8", "unknown")
+)
+
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 library(tidyverse)
 library(readxl)
@@ -43,6 +51,222 @@ dados_grafico_comparacao_filme_bozo %>%
   geom_col(aes(fill= valor_total_uf), color = "lightgray") +
   scale_fill_continuous_sequential(palette = "Heat 2")
 
+
+```
+
+
+```{r}
+
+library(tidyverse)
+library(scales)
+library(ggtext)
+
+# Parâmetros
+valor_dark_horse <- 134e6
+
+ufs_selecionadas <- c(
+  "Acre", "Roraima", "Tocantins", "Mato Grosso do Sul",
+  "Amapá", "Piauí", "Rondônia", "Paraíba",
+  "Alagoas", "Sergipe", "Rio Grande do Norte", "Maranhão",
+  "Goiás", "Mato Grosso", "Amazonas", "Ceará", "Bahia"
+)
+
+ufs_selecionadas_siglas <- c(
+  "AC", "RR", "TO", "MS", "AP", "PI",
+  "RO", "PB", "AL", "SE", "RN", "MA",
+  "GO", "MT", "AM", "CE", "BA"
+)
+
+
+# Preparação dos dados
+dados_uf <-
+  grid_Projetos_Por_UF |>
+  filter(uf %in% ufs_selecionadas) |>
+  summarise(
+    valor = sum(vl_captado, na.rm = TRUE),
+    .by = uf
+  ) |>
+  arrange(valor) |>
+  mutate(
+    inicio = lag(cumsum(valor), default = 0),
+    fim = cumsum(valor),
+    tipo = "Lei Rouanet"
+  )
+
+valor_rouanet <- sum(dados_uf$valor)
+
+# Verificação da seleção
+stopifnot(
+  setequal(dados_uf$uf, ufs_selecionadas)
+)
+
+fmt_mi <- function(x) {
+  paste0(
+    "R$ ",
+    number(x / 1e6, accuracy = 1,
+           decimal.mark = ",",
+           big.mark = "."),
+    " milhões"
+  )
+}
+
+# Dados da comparação
+dados_barras <- tibble(
+  tipo = c("Lei Rouanet", "Dark Horse"),
+  valor = c(valor_rouanet, valor_dark_horse),
+  y = c(1, 2)
+)
+
+limite_x <- max(dados_barras$valor) * 1.20
+
+grafico <-
+  ggplot() +
+
+  # Barra do filme
+  geom_rect(
+    data = filter(dados_barras, tipo == "Dark Horse"),
+    aes(
+      xmin = 0,
+      xmax = valor,
+      ymin = 1.72,
+      ymax = 2.28
+    ),
+    fill = "#B84A59",
+    color = "#FFFFFF",
+    linewidth = 0.35
+  ) +
+
+  # Barra Rouanet: segmentos por UF
+  geom_rect(
+    data = dados_uf,
+    aes(
+      xmin = inicio,
+      xmax = fim,
+      ymin = 0.72,
+      ymax = 1.28
+    ),
+    fill = "#147D78",
+    color = "#FFFFFF",
+    linewidth = 0.35
+  ) +
+
+  # Valores destacados
+  geom_text(
+    data = dados_barras,
+    aes(
+      x = valor + 2.5e6,
+      y = y,
+      label = fmt_mi(valor)
+    ),
+    hjust = 0,
+    fontface = "bold",
+    size = 5.3,
+    color = "#172B4D"
+  ) +
+
+  scale_y_continuous(
+    breaks = c(1, 2),
+    labels = c(
+      "Lei Rouanet\n17 estados",
+      "Dark Horse\nvalor negociado"
+    ),
+    limits = c(0.45, 2.55),
+    expand = expansion(mult = 0)
+  ) +
+
+  scale_x_continuous(
+    limits = c(0, limite_x),
+    breaks = c(0, 50e6, 100e6, 150e6),
+    labels = function(x) paste0(x / 1e6, " mi"),
+    expand = expansion(mult = 0)
+  ) +
+
+  labs(
+    title = paste0(
+      "R$ 134 milhões para um filme.<br>",
+      "<span style='color:#147D78;'>",
+      "R$ 117 milhões captados em 17 estados.",
+      "</span>"
+    ),
+
+    subtitle = paste0(
+  "O financiamento negociado para ",
+  "<b>Dark Horse</b> supera a captação conjunta<br>",
+  "de <b>2.669 projetos</b> da Lei Rouanet ",
+  "em 17 estados brasileiros, em 2025."
+),
+
+    caption = paste0(
+  "17 estados: ",
+  paste(ufs_selecionadas_siglas, collapse = ", "),
+  "\nFonte: Lei Rouanet (2025) e informações ",
+  "divulgadas sobre Dark Horse.",
+  "\nNota sobre Dark Horse: valor negociado, não gasto comprovado."
+)
+  ) +
+
+  coord_cartesian(clip = "off") +
+
+  theme_void(base_family = "sans") +
+
+  theme(
+    plot.background = element_rect(
+      fill = "#F8F7F3", color = NA
+    ),
+
+    plot.margin = margin(48, 55, 40, 45),
+
+    plot.title = ggtext::element_markdown(
+      size = 24,
+      face = "bold",
+      color = "#172B4D",
+      lineheight = 1.15,
+      margin = margin(b = 18)
+    ),
+
+    plot.subtitle = ggtext::element_markdown(
+      size = 13,
+      color = "#455468",
+      lineheight = 1.35,
+      margin = margin(b = 28)
+    ),
+
+    axis.text.y = element_text(
+      size = 13,
+      face = "bold",
+      color = "#172B4D",
+      lineheight = 1.1,
+      margin = margin(r = 12)
+    ),
+
+    axis.text.x = element_text(
+      size = 10,
+      color = "#687585",
+      margin = margin(t = 10)
+    ),
+
+    plot.caption = element_text(
+      size = 9,
+      color = "#687585",
+      hjust = 0,
+      lineheight = 1.3,
+      margin = margin(t = 35)
+    ),
+
+    plot.caption.position = "plot"
+  )
+
+grafico
+
+ggsave(
+  filename = "card_rouanet_dark_horse.png",
+  plot = grafico,
+  width = 10.8,
+  height = 13.5,
+  units = "in",
+  dpi = 100,
+  bg = "#F8F7F3"
+)
 
 ```
 
